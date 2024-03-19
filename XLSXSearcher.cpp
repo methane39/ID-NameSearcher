@@ -5,18 +5,47 @@
 #include <ShObjIdl.h>
 #include <Shlwapi.h>
 
+
 #define BUTTON_IN 39101
 #define ID_EDIT 39201
 #define BUTTON_OUT 39102
 #define ID_OUT 39202
 #define BUTTON_DONE 39103
+#define EDIT_NAME 39203
+#define EDIT_ID 39204
+#define IDC_PROGRESS1 39301
 
 const char g_szClassName[] = "myWindowClass";
 LPWSTR g_lpstrFilePATH = nullptr;
 LPWSTR g_lpstrOutPATH = nullptr;
+std::vector<std::string> files;
+std::vector<std::string> XMLfiles;
+std::vector<std::string> PDFfiles;
+std::string uName;
+std::string uID;
 
+HANDLE hConsole = 0;
 HWND hEdit;
 HWND hEdit2;
+HWND hName;
+HWND hID;
+HWND hWndProgress;
+HWND hWndButtonDone;
+
+std::string LPWSTRToString(LPWSTR pwszStr) {
+    int nLen = WideCharToMultiByte(CP_ACP, 0, pwszStr, -1, NULL, 0, NULL, NULL);
+    if (nLen <= 0) {
+        return "";
+    }
+
+    char* pszStr = new char[nLen];
+    WideCharToMultiByte(CP_ACP, 0, pwszStr, -1, pszStr, nLen, NULL, NULL);
+
+    std::string str(pszStr);
+    delete[] pszStr;
+
+    return str;
+}
 
 BOOL CALLBACK EnumChildProc(HWND hWnd, LPARAM lParam) {
     SendMessage(hWnd, WM_SETFONT, lParam, TRUE);
@@ -131,6 +160,18 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
     {
     case WM_COMMAND:
     {
+        if (LOWORD(wParam) == EDIT_NAME && HIWORD(wParam) == EN_KILLFOCUS) {
+            TCHAR szText[100]; 
+            GetWindowText(hName, szText, 100);
+            WriteConsole(hConsole, szText, sizeof(szText), NULL, NULL);
+            uName = szText;
+        }
+        if (LOWORD(wParam) == EDIT_ID && HIWORD(wParam) == EN_KILLFOCUS) {
+            TCHAR szText[100];
+            GetWindowText(hID, szText, 100);
+            WriteConsole(hConsole, szText, sizeof(szText), NULL, NULL);
+            uID = szText;
+        }
         if (LOWORD(wParam) == BUTTON_IN && HIWORD(wParam) == BN_CLICKED) {
             g_lpstrFilePATH = new WCHAR[MAX_PATH];
             HRESULT hr = OpenFolderDialog(hWnd, g_lpstrFilePATH, MAX_PATH);
@@ -147,7 +188,22 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
         }
         if (LOWORD(wParam) == BUTTON_DONE && HIWORD(wParam) == BN_CLICKED) {
             if (CheckValidPath(hWnd)) {
+                EnableWindow(hWndButtonDone, FALSE);
+                WriteConsole(hConsole, uName.c_str(), static_cast<DWORD>(uName.size()), NULL, NULL);
+                XLSXUtils::GetAllFiles(g_lpstrFilePATH, files, XMLfiles, PDFfiles); 
+                SendMessage(hWndProgress, PBM_SETPOS, 5, 0);
+                XLSXUtils::DoContain(uID, uName, files, XMLfiles, hWndProgress);
+                /*for each (std::string path in files)
+                {
 
+                    WriteConsole(hConsole, path.c_str(), static_cast<DWORD>(path.size()), NULL, NULL);
+                }
+                for each (std::string path in XMLfiles)
+                {
+                    WriteConsole(hConsole, path.c_str(), static_cast<DWORD>(path.size()), NULL, NULL);
+                }*/
+                std::string outputPath = LPWSTRToString(g_lpstrOutPATH);
+                XLSXUtils::Export(outputPath, files, XMLfiles, hWndProgress);
             }
             else {
                 
@@ -173,17 +229,42 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
             DEFAULT_PITCH | FF_SWISS, // Pitch and family
             TEXT("Microsoft YaHei")); // Typeface name
 
-        HWND hWndButton = CreateWindow("BUTTON", "...", WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON, 10, 10, 40, 29, hWnd, (HMENU)BUTTON_IN, (HINSTANCE)GetWindowLongPtr(hWnd, GWLP_HINSTANCE), NULL);
+        HWND hWndButton = CreateWindow("BUTTON", "IN", WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON, 10, 10, 40, 29, hWnd, (HMENU)BUTTON_IN, (HINSTANCE)GetWindowLongPtr(hWnd, GWLP_HINSTANCE), NULL);
 
-        hEdit = CreateWindowEx(WS_EX_CLIENTEDGE, "EDIT", "",WS_CHILD|WS_VISIBLE|WS_BORDER|ES_AUTOHSCROLL, 60, 10, 290, 29, hWnd, (HMENU)ID_EDIT, GetModuleHandle(NULL), NULL);
+        hEdit = CreateWindowEx(WS_EX_CLIENTEDGE, "EDIT", "",WS_CHILD|WS_VISIBLE|ES_AUTOHSCROLL, 60, 10, 290, 29, hWnd, (HMENU)ID_EDIT, GetModuleHandle(NULL), NULL);
 
-        HWND hWndButton2 = CreateWindow("BUTTON", "...", WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON, 10, 40, 40, 29, hWnd, (HMENU)BUTTON_OUT, (HINSTANCE)GetWindowLongPtr(hWnd, GWLP_HINSTANCE), NULL);
+        HWND hWndButton2 = CreateWindow("BUTTON", "OUT", WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON, 10, 40, 40, 29, hWnd, (HMENU)BUTTON_OUT, (HINSTANCE)GetWindowLongPtr(hWnd, GWLP_HINSTANCE), NULL);
 
-        hEdit2 = CreateWindowEx(WS_EX_CLIENTEDGE, "EDIT", "", WS_CHILD | WS_VISIBLE | WS_BORDER | ES_AUTOHSCROLL, 60, 40, 290, 29, hWnd, (HMENU)ID_OUT, GetModuleHandle(NULL), NULL);
+        hEdit2 = CreateWindowEx(WS_EX_CLIENTEDGE, "EDIT", "", WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL, 60, 40, 290, 29, hWnd, (HMENU)ID_OUT, GetModuleHandle(NULL), NULL);
 
-        HWND hWndButtonDone = CreateWindow("BUTTON", "OK", WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON, 10, 80, 40, 20, hWnd, (HMENU)BUTTON_DONE, (HINSTANCE)GetWindowLongPtr(hWnd, GWLP_HINSTANCE), NULL);
+        hName = CreateWindowEx(WS_EX_CLIENTEDGE, "EDIT", "ÐÕÃû", WS_CHILD | WS_VISIBLE , 10, 80, 140, 28, hWnd, (HMENU)EDIT_NAME, GetModuleHandle(NULL), NULL);
+
+        hID = CreateWindowEx(WS_EX_CLIENTEDGE, "EDIT", "Ñ§ºÅ", WS_CHILD | WS_VISIBLE , 160, 80, 140, 28, hWnd, (HMENU)EDIT_ID, GetModuleHandle(NULL), NULL);
+
+        hWndButtonDone = CreateWindow("BUTTON", "OK", WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON, 300, 80, 40, 28, hWnd, (HMENU)BUTTON_DONE, (HINSTANCE)GetWindowLongPtr(hWnd, GWLP_HINSTANCE), NULL);
+
+        hWndProgress = CreateWindowEx(0, PROGRESS_CLASS, "", WS_CHILD | WS_VISIBLE,
+            10, 120, 340, 20, hWnd, (HMENU)IDC_PROGRESS1, NULL, NULL);
+
+        SetWindowRgn(hWndButton, CreateRoundRectRgn(0, 0, 100, 25, 10, 10), TRUE);
+        SetWindowRgn(hWndButton2, CreateRoundRectRgn(0, 0, 100, 25, 10, 10), TRUE);
+
+        HDC  hWndButtonIn = GetDC(hWndButton);
+        HDC  hWndButtonOut = GetDC(hWndButton2);
+        SetBkColor(hWndButtonIn, RGB(235, 235, 235));
+        SetBkColor(hWndButtonOut, RGB(235, 235, 235));
+
+        SetTextColor(hWndButtonIn, RGB(0, 0, 0));
+        SetTextColor(hWndButtonOut, RGB(0, 0, 0));
+
+        SetFocus(hName);
+        SetFocus(hID);
+
+        SendMessage(hWndProgress, PBM_SETRANGE, 0, MAKELPARAM(0, 100));
 
         EnumChildWindows(hWnd, EnumChildProc, (LPARAM)hFont);
+        EnableWindow(hEdit, FALSE);
+        EnableWindow(hEdit2, FALSE);
         break;
     }
     case WM_CLOSE:
@@ -203,6 +284,8 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     HWND hwnd;
     MSG Msg;
 
+    AllocConsole();
+    hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
 
     CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
 
@@ -214,7 +297,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     wc.hInstance = hInstance;
     wc.hIcon = LoadIcon(NULL, IDI_APPLICATION);
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
-    wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+    wc.hbrBackground = (HBRUSH)(COLOR_WINDOW);
     wc.lpszMenuName = NULL;
     wc.lpszClassName = g_szClassName;
     wc.hIconSm = LoadIcon(NULL, IDI_APPLICATION);
